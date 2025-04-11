@@ -25,7 +25,10 @@ webapp/
 ## Requisitos
 
 - Python 3.8 ou superior
-- Flask e outras dependências (listadas em requirements.txt)
+- Flask 2.0.3 (versão compatível com o servidor Webuzo)
+- Outras dependências listadas em requirements.txt
+
+> **Importante**: Esta aplicação foi adaptada para usar Flask 2.0.3, que é a versão disponível no servidor Webuzo. Não tente instalar versões mais recentes, pois podem ocorrer problemas de compatibilidade.
 
 ## Instruções para Implantação no Webuzo
 
@@ -88,3 +91,67 @@ service apache2 restart
 ### Atualização de Dados
 
 Para atualizar os dados, copie o novo arquivo `devotionals.json` para o diretório `data/` e reinicie a aplicação:
+
+## Solução de Problemas
+
+### Erro: Connection Refused (Porta 30000)
+
+Se você encontrar o erro:
+
+```
+[proxy:error] [pid XXXXX:tid XXXXX] (111)Connection refused: AH00957: http: attempt to connect to 127.0.0.1:30000 (127.0.0.1:30000) failed
+```
+
+Este erro indica que o Apache está configurado para conectar-se a um processo que deve estar rodando na porta 30000, mas não consegue encontrá-lo. Siga os passos abaixo para resolver:
+
+1. **Verifique a configuração do Virtual Host**:
+   A configuração correta deve usar o módulo WSGI diretamente e não o proxy:
+
+   ```apache
+   <VirtualHost *:80>
+       ServerName seudominio.com
+
+       # Configuração correta do WSGI
+       WSGIDaemonProcess pregacoes python-home=/caminho/para/webapp/venv python-path=/caminho/para/webapp
+       WSGIProcessGroup pregacoes
+       WSGIScriptAlias / /caminho/para/webapp/wsgi.py
+
+       <Directory /caminho/para/webapp>
+           Require all granted
+       </Directory>
+
+       ErrorLog ${APACHE_LOG_DIR}/error.log
+       CustomLog ${APACHE_LOG_DIR}/access.log combined
+   </VirtualHost>
+   ```
+
+2. **Remova qualquer configuração de proxy** que esteja tentando encaminhar para 127.0.0.1:30000. Procure e remova linhas como:
+
+   ```apache
+   ProxyPass / http://127.0.0.1:30000/
+   ProxyPassReverse / http://127.0.0.1:30000/
+   ```
+
+3. **Módulos necessários**: Certifique-se de que o módulo mod_wsgi está habilitado:
+
+   ```bash
+   a2enmod wsgi
+   ```
+
+4. **Reinicie o Apache**:
+
+   ```bash
+   service apache2 restart
+   ```
+
+5. **Verifique permissões**:
+   ```bash
+   chmod 755 /caminho/para/webapp/wsgi.py
+   chown www-data:www-data -R /caminho/para/webapp
+   ```
+
+### Outras Verificações
+
+- Verifique o log de erros para obter mais detalhes: `tail -f /var/log/apache2/error.log`
+- Confirme se o arquivo wsgi.py está importando corretamente a aplicação Flask
+- Verifique se todos os caminhos na configuração do Apache estão corretos
